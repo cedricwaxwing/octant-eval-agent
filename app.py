@@ -13,8 +13,8 @@ st.markdown(
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stSidebar hr {
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
+        margin-top: 1rem !important;
+        margin-bottom: 1rem !important;
     }
     h2:first-of-type {
         padding-top: 0 !important;
@@ -62,14 +62,6 @@ def wei_to_eth(wei_val) -> str:
         return "N/A"
 
 
-def wei_to_eth_float(wei_val) -> float:
-    """Convert wei to ETH as a float for charting."""
-    try:
-        return int(wei_val) / 1e18
-    except (ValueError, TypeError):
-        return 0.0
-
-
 def compute_dataset_stats(data):
     """Precompute summary stats for the sidebar."""
     epochs = data.get("epochs", {})
@@ -106,6 +98,14 @@ def compute_dataset_stats(data):
     }
 
 
+def wei_to_eth_float(wei_val) -> float:
+    """Convert wei to ETH as a float for charting."""
+    try:
+        return int(wei_val) / 1e18
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def build_epoch_chart_data(data):
     """Build a DataFrame of per-epoch donated vs matched rewards in ETH."""
     epochs = data.get("epochs", {})
@@ -113,10 +113,13 @@ def build_epoch_chart_data(data):
     for epoch_str in sorted(epochs.keys(), key=int):
         epoch_data = epochs[epoch_str]
         stats = epoch_data.get("stats", {})
+        donated = wei_to_eth_float(stats.get("donatedToProjects", 0))
+        if donated <= 1:
+            continue
         rows.append({
             "Epoch": int(epoch_str),
-            "Donated to projects": wei_to_eth_float(stats.get("donatedToProjects", 0)),
-            "Matched rewards": wei_to_eth_float(stats.get("matchedRewards", 0)),
+            "Donated to projects (ETH)": donated,
+            "Matched rewards (ETH)": wei_to_eth_float(stats.get("matchedRewards", 0)),
         })
     return pd.DataFrame(rows)
 
@@ -124,6 +127,7 @@ def build_epoch_chart_data(data):
 dataset = get_dataset()
 stats = compute_dataset_stats(dataset)
 chart_df = build_epoch_chart_data(dataset)
+
 
 
 # --- Sidebar ---
@@ -142,7 +146,6 @@ with st.sidebar:
     col_c.metric("Unique donors", f"{stats['unique_donors']:,}")
     col_d.metric("Unique patrons", f"{stats['unique_patrons']:,}")
 
-    st.metric("Total staking proceeds", f"{stats['total_staking_eth']} ETH")
     st.metric("Total donated to projects", f"{stats['total_donated_eth']} ETH")
 
     st.divider()
@@ -168,7 +171,7 @@ with st.sidebar:
 # Title
 st.title("🔮 Octant Eval Agent")
 
-# Accordion (like Magic Chat's "Built with Weaviate..." expander)
+# Accordion
 with st.expander("Built with Octant data for the Synthesis Hackathon 2026"):
     st.markdown(
         "**Octant Eval Agent** is an AI-powered tool for analyzing the "
@@ -188,11 +191,10 @@ with st.expander("Built with Octant data for the Synthesis Hackathon 2026"):
         "Targeting the **Data Collection** and **Data Analysis** bounties."
     )
 
-# Chart: Donated to projects vs matched rewards per epoch
 st.bar_chart(
     chart_df.set_index("Epoch"),
     color=["#22c55e", "#3b82f6"],
-    height=260,
+    height=240,
 )
 
 st.divider()
