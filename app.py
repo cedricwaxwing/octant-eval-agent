@@ -48,5 +48,5 @@ if question:
     with st.spinner("Thinking with Claude..."):
         answer = answer_question(question, dataset)
     st.session_state.history.append({"question": question, "answer": answer})
-    st.experimental_rerun()
+    st.rerun()
 
