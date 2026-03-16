@@ -88,24 +88,55 @@ def detect_epochs_in_question(question: str, max_epoch: int) -> List[int]:
     return sorted(epochs)
 
 
+PROJECT_ALIASES: Dict[str, List[str]] = {
+    # Simple alias examples; extend as needed
+    "gitcoin": ["gitcoin", "gitcoin grants"],
+    "giveth": ["giveth"],
+    "glo dollar": ["glo", "glo dollar"],
+}
+
+
+def tokenize(text: str) -> List[str]:
+    return re.findall(r"\w+", text.lower())
+
+
 def find_projects_matching_question(
     question: str,
     project_index: Dict[str, Dict[str, Any]],
     limit: int = 5,
 ) -> List[Tuple[str, Dict[str, Any]]]:
     """
-    Very simple fuzzy match: substring match on project names.
+    Fuzzy match: look for project-name tokens and aliases inside the question.
     Returns list of (address, project_info).
     """
-    q = question.lower()
+    q_lower = question.lower()
+    q_tokens = set(tokenize(question))
+
     matches: List[Tuple[str, Dict[str, Any]]] = []
     for addr, info in project_index.items():
         name = (info.get("name") or "").lower()
         if not name:
             continue
-        if q in name or any(word in name for word in q.split()):
+
+        name_tokens = set(tokenize(name))
+
+        # Direct substring match: project name appears in question
+        name_in_question = name in q_lower
+
+        # Token overlap: any project token appears in question tokens
+        token_overlap = bool(name_tokens & q_tokens)
+
+        # Alias-based matching
+        alias_hit = False
+        for canonical, aliases in PROJECT_ALIASES.items():
+            if canonical in name:
+                if any(alias in q_lower for alias in aliases):
+                    alias_hit = True
+                    break
+
+        if name_in_question or token_overlap or alias_hit:
             matches.append((addr, info))
-    # Deduplicate and limit
+
     return matches[:limit]
 
 
