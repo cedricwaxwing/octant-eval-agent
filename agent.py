@@ -190,6 +190,39 @@ def project_rewards_across_epochs(
     return sorted(results, key=lambda x: x[0])
 
 
+def summarize_allocations_for_epoch(epoch_data: Dict[str, Any]) -> str:
+    allocs = epoch_data.get("allocations") or []
+    donors = epoch_data.get("donors") or []
+    if not allocs:
+        return "  Allocations: none recorded in this dataset."
+
+    unique_donors = {a.get("donor") for a in allocs if a.get("donor")}
+    total_allocations = len(allocs)
+    return (
+        f"  Allocations: {total_allocations} total, "
+        f"{len(unique_donors)} unique donors (based on allocation data)."
+    )
+
+
+def summarize_allocations_for_project(address: str, data: Dict[str, Any]) -> List[str]:
+    lines: List[str] = []
+    for epoch_str, epoch_data in data.get("epochs", {}).items():
+        try:
+            e = int(epoch_str)
+        except ValueError:
+            continue
+        allocs = epoch_data.get("allocations") or []
+        project_allocs = [a for a in allocs if a.get("project") == address]
+        if not project_allocs:
+            continue
+        unique_donors = {a.get("donor") for a in project_allocs if a.get("donor")}
+        lines.append(
+            f"  Epoch {e}: {len(project_allocs)} allocations from "
+            f"{len(unique_donors)} unique donors (project-level allocation data)."
+        )
+    return lines
+
+
 def build_context_for_question(question: str, data: Dict[str, Any]) -> str:
     meta = data.get("meta", {})
     epochs = data.get("epochs", {})
@@ -198,6 +231,18 @@ def build_context_for_question(question: str, data: Dict[str, Any]) -> str:
     project_index = build_project_index(data)
     mentioned_epochs = detect_epochs_in_question(question, current_epoch)
     matched_projects = find_projects_matching_question(question, project_index)
+
+    wants_allocations = any(
+        kw in question.lower()
+        for kw in [
+            "allocation",
+            "allocations",
+            "donor",
+            "donors",
+            "average allocation",
+            "unique donors",
+        ]
+    )
 
     lines: List[str] = []
     lines.append("You are an expert Octant analyst.")
@@ -222,6 +267,8 @@ def build_context_for_question(question: str, data: Dict[str, Any]) -> str:
     for e in target_epochs:
         epoch_data = epochs.get(str(e), {})
         lines.append(summarize_epoch(e, epoch_data))
+        if wants_allocations:
+            lines.append(summarize_allocations_for_epoch(epoch_data))
     lines.append("")
 
     # Project details for matches
@@ -237,6 +284,11 @@ def build_context_for_question(question: str, data: Dict[str, Any]) -> str:
                     lines.append(
                         f"  Epoch {e}: allocated={r.get('allocated')}, matched={r.get('matched')}"
                     )
+            if wants_allocations:
+                alloc_lines = summarize_allocations_for_project(addr, data)
+                if alloc_lines:
+                    lines.append("Allocation stats:")
+                    lines.extend(alloc_lines)
             lines.append("")
 
     return "\n".join(lines)
