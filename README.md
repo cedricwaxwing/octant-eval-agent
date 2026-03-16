@@ -77,7 +77,7 @@ cd octant-eval-agent
 
 python3 -m venv .venv
 source .venv/bin/activate
-pip install requests
+pip install -r requirements.txt
 
 cp .env.sample .env
 # Add your ANTHROPIC_API_KEY to .env
@@ -91,7 +91,15 @@ python collect_data.py
 
 This fetches all finalized epochs from Octant's production API and writes `octant_data.json`. Takes about 30 seconds.
 
-### Step 2: Run the agent
+### Step 2: Collect the data
+
+```bash
+python collect_data.py
+```
+
+This fetches all finalized epochs from Octant's production API and writes `octant_data.json`. Takes about 30 seconds.
+
+### Step 3: Run the CLI agent
 
 ```bash
 python agent.py
@@ -109,15 +117,53 @@ You: Compare donor participation between epochs 3 and 6.
 
 Type `quit` or `exit` to stop.
 
+### Step 4: Run the HTTP API (optional)
+
+Start the FastAPI server:
+
+```bash
+uvicorn api:app --reload
+```
+
+Endpoints:
+
+- `GET /health` – basic health/status.
+- `GET /epochs` – list of epochs in the dataset.
+- `POST /ask` – JSON body `{ "question": "..." }`, returns `{ "answer": "...", "model": "...", "epochs": [...] }`.
+
+### Step 5: Run the Streamlit chat UI (optional)
+
+```bash
+streamlit run app.py
+```
+
+This opens a browser UI where you can:
+
+- Enter questions in a chat-style interface
+- See a running history of Q&A
+- View basic dataset metadata (current epoch, available epochs) in the sidebar
+
+### Step 6: Run the evaluation harness (optional)
+
+```bash
+python eval.py
+```
+
+This sends a small set of curated questions through the agent and checks that key phrases appear in the answers, printing per-test PASS/FAIL plus an aggregate score.
+
 ## Project structure
 
 ```
 octant-eval-agent/
-  agent.py           # CLI agent: question parsing, context building, LLM call
+  agent.py           # CLI/logic: question parsing, context building, LLM call
+  api.py             # FastAPI app: /health, /epochs, /ask
+  app.py             # Streamlit chat UI on top of the agent
   collect_data.py    # Data collector: fetches all Octant epochs from production API
+  eval.py            # Simple evaluation harness with test questions
   octant_data.json   # Generated dataset (gitignored)
   .env               # API keys (gitignored)
   .env.sample        # Template for .env
+  requirements.txt   # Python deps
   README.md
 ```
 
@@ -127,7 +173,7 @@ octant-eval-agent/
 
 **Pre-computed local dataset.** All data is fetched once and stored locally. The agent never calls the Octant API at query time. This means fast responses and no risk of hammering a production endpoint during a demo.
 
-**Minimal dependencies.** The data collector uses only stdlib (`urllib`, `json`). The agent adds `requests` for the Anthropic API call. No frameworks, no vector DBs, no complex infra.
+**Minimal dependencies.** The data collector uses only stdlib (`urllib`, `json`). The agent stack adds `requests` for the Anthropic API call, `fastapi`+`uvicorn` for an optional HTTP API, and `streamlit` for a lightweight chat UI. No vector DBs, no complex infra.
 
 ## Requirements
 
