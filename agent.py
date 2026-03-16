@@ -100,6 +100,22 @@ def tokenize(text: str) -> List[str]:
     return re.findall(r"\w+", text.lower())
 
 
+def wei_to_eth(wei_str: Any) -> Any:
+    """Convert wei string to ETH float, rounded to 2 decimal places."""
+    try:
+        return round(int(str(wei_str)) / 1e18, 2)
+    except (ValueError, TypeError):
+        return wei_str
+
+
+def format_eth(wei_str: Any) -> Any:
+    """Convert wei to formatted ETH string with commas, or return original on failure."""
+    eth = wei_to_eth(wei_str)
+    if isinstance(eth, (int, float)):
+        return f"{eth:,.2f} ETH"
+    return eth
+
+
 def find_projects_matching_question(
     question: str,
     project_index: Dict[str, Dict[str, Any]],
@@ -152,21 +168,21 @@ def summarize_epoch(epoch_num: int, epoch_data: Dict[str, Any]) -> str:
     if stats:
         parts.append(
             "  Stats: "
-            f"stakingProceeds={stats.get('stakingProceeds')}, "
-            f"totalRewards={stats.get('totalRewards')}, "
-            f"matchedRewards={stats.get('matchedRewards')}, "
-            f"donatedToProjects={stats.get('donatedToProjects')}"
+            f"stakingProceeds={format_eth(stats.get('stakingProceeds'))}, "
+            f"totalRewards={format_eth(stats.get('totalRewards'))}, "
+            f"matchedRewards={format_eth(stats.get('matchedRewards'))}, "
+            f"donatedToProjects={format_eth(stats.get('donatedToProjects'))}"
         )
     if donors is not None:
         parts.append(f"  Donors: {donors}")
     if patrons is not None:
         parts.append(f"  Patrons: {patrons}")
     if unused is not None:
-        parts.append(f"  Unused rewards: {unused}")
+        parts.append(f"  Unused rewards: {format_eth(unused)}")
     if leverage is not None:
         parts.append(f"  Leverage: {leverage}")
     if threshold is not None:
-        parts.append(f"  Threshold: {threshold}")
+        parts.append(f"  Threshold: {format_eth(threshold)}")
     return "\n".join(parts)
 
 
@@ -186,7 +202,11 @@ def project_rewards_across_epochs(
             continue
         for entry in epoch_data.get("project_rewards", []):
             if entry.get("address") == address:
-                results.append((e, entry))
+                # Make a shallow copy so we can format values without mutating original data
+                formatted = dict(entry)
+                formatted["allocated"] = format_eth(entry.get("allocated"))
+                formatted["matched"] = format_eth(entry.get("matched"))
+                results.append((e, formatted))
     return sorted(results, key=lambda x: x[0])
 
 
@@ -279,7 +299,7 @@ def build_context_for_question(question: str, data: Dict[str, Any]) -> str:
             lines.append(f"Epochs listed: {sorted(info.get('epochs', []))}")
             rewards = project_rewards_across_epochs(addr, data)
             if rewards:
-                lines.append("Rewards by epoch (allocated, matched):")
+                lines.append("Rewards by epoch (allocated, matched) in ETH:")
                 for e, r in rewards:
                     lines.append(
                         f"  Epoch {e}: allocated={r.get('allocated')}, matched={r.get('matched')}"
@@ -312,17 +332,22 @@ def call_claude(question: str, context: str) -> str:
     }
 
     system_prompt = (
-        "You are OctantEvalAgent, an assistant that answers questions about the "
-        "Octant funding mechanism, epochs, projects, donors, and rewards. "
-        "Use ONLY the structured data provided in the context. "
-        "When you give numeric answers, explicitly mention which epochs or projects "
-        "they come from, e.g. 'In epoch 3, ...'. If the answer is not in the data, "
-        "say so clearly rather than guessing."
+        "You are OctantEvalAgent, an expert analyst for the Octant public goods funding protocol.\n\n"
+        "Rules:\n"
+        "- Use ONLY the structured data provided in the context. Never fabricate numbers.\n"
+        "- Lead with the insight. Start your answer with the key finding or number the user is "
+        "looking for. Put supporting detail (per-epoch breakdowns, tables) after the main takeaway.\n"
+        "- When you cite numbers, always mention which epoch or project they come from.\n"
+        "- All monetary values in the data are in ETH. Use 2 decimal places.\n"
+        "- If the answer is not in the data, say so clearly.\n"
+        "- Keep responses concise. Prefer 2-3 short paragraphs over long tables. Only use tables when "
+        "comparing 4 or more items.\n"
+        "- When showing trends, describe the direction and magnitude in plain language before listing numbers."
     )
 
     payload = {
         "model": model,
-        "max_tokens": 800,
+        "max_tokens": 1500,
         "temperature": 0.2,
         "system": system_prompt,
         "messages": [
