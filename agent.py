@@ -275,6 +275,14 @@ def call_claude(question: str, context: str) -> str:
     return json.dumps(data, indent=2)
 
 
+def answer_question(question: str, dataset: Dict[str, Any]) -> str:
+    """
+    Shared helper used by both the CLI and the HTTP API.
+    """
+    ctx = build_context_for_question(question, dataset)
+    return call_claude(question, ctx)
+
+
 def interactive_loop(dataset: Dict[str, Any]) -> None:
     print("=== OctantEvalAgent ===")
     print("Ask questions about Octant epochs, projects, donors, and rewards.")
@@ -293,9 +301,8 @@ def interactive_loop(dataset: Dict[str, Any]) -> None:
             print("Goodbye.")
             break
 
-        ctx = build_context_for_question(question, dataset)
         print("\nThinking with Claude...\n")
-        answer = call_claude(question, ctx)
+        answer = answer_question(question, dataset)
         print(f"Agent: {answer}\n")
 
 
