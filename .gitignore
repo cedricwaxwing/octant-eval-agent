@@ -2,3 +2,4 @@
 octant_data.json
 __pycache__/
 .venv/
+.agent-registration.json
