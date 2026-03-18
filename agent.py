@@ -284,6 +284,18 @@ def build_context_for_question(question: str, data: Dict[str, Any]) -> str:
         target_epochs = sorted(int(e) for e in epochs.keys())
 
     lines.append("=== EPOCH SUMMARIES ===")
+    # Annotation to prevent misinterpretation of low participation numbers.
+    # This is a dataset-specific migration note provided for the hackathon.
+    if 11 in target_epochs:
+        lines.append(
+            "=== CONTEXT NOTE: EPOCH 11 (v1-to-v2 migration) ==="
+        )
+        lines.append(
+            "Note: Epoch 11 was the final v1 epoch (allocation window Feb 18 - Mar 4, 2026). "
+            "It had no Golem Foundation matching funds and only Protocol Guild as a recipient. "
+            "Low donation and participation numbers reflect the v1-to-v2 migration, not a decline in protocol health."
+        )
+        lines.append("")
     for e in target_epochs:
         epoch_data = epochs.get(str(e), {})
         lines.append(summarize_epoch(e, epoch_data))
